@@ -32,9 +32,58 @@
         <input id="loginEmail" type="email" placeholder="Email" required autocomplete="email">
         <input id="loginPassword" type="password" placeholder="Пароль" required minlength="8" autocomplete="current-password">
         <button class="primary-button" type="submit">Войти</button>
+        <button class="text-button" id="showRegisterButton" type="button">Создать аккаунт</button>
         <button class="text-button" id="recoverButton" type="button">Восстановить доступ</button>
       </form>
+      <form id="registerForm" class="auth-form hidden">
+        <input id="registerEmail" type="email" placeholder="Email" required autocomplete="email">
+        <input id="registerPassword" type="password" placeholder="Пароль (от 8 символов)" required minlength="8" maxlength="200" autocomplete="new-password">
+        <button class="primary-button" type="submit">Зарегистрироваться</button>
+        <button class="text-button" id="showLoginButton" type="button">Уже есть аккаунт? Войти</button>
+      </form>
+      <form id="userForm" class="auth-form hidden">
+        <input id="userEmail" type="email" placeholder="Email нового пользователя" required autocomplete="off">
+        <input id="userPassword" type="password" placeholder="Пароль пользователя (от 8 символов)" required minlength="8" maxlength="200" autocomplete="new-password">
+        <select id="userRole" aria-label="Роль нового пользователя">
+          <option value="viewer">Читатель</option>
+          <option value="editor">Редактор</option>
+          <option value="admin">Администратор</option>
+        </select>
+        <button class="primary-button" type="submit">Создать аккаунт</button>
+      </form>
+      <form id="recoveryForm" class="auth-form hidden">
+        <input id="recoveryEmail" type="email" placeholder="Email аккаунта" required autocomplete="email">
+        <button class="primary-button" type="submit">Отправить ссылку</button>
+        <button class="text-button" id="cancelRecoveryButton" type="button">Назад ко входу</button>
+      </form>
+      <form id="resetPasswordForm" class="auth-form hidden">
+        <input id="newPassword" type="password" placeholder="Новый пароль (от 8 символов)" required minlength="8" maxlength="200" autocomplete="new-password">
+        <input id="confirmPassword" type="password" placeholder="Повторите новый пароль" required minlength="8" maxlength="200" autocomplete="new-password">
+        <button class="primary-button" type="submit">Сохранить пароль</button>
+        <button class="text-button" id="cancelResetButton" type="button">Назад ко входу</button>
+      </form>
+      <p class="message" id="userMessage" role="status" aria-live="polite"></p>
+      <p class="message" id="authMessage" role="status" aria-live="polite"></p>
       <button class="text-button hidden" id="logoutButton" type="button">Выйти</button>
+      <button class="text-button hidden" id="logoutAllButton" type="button">Выйти на всех устройствах</button>
+    </section>
+    <section class="admin-panel hidden" id="adminSessionPanel" aria-labelledby="adminSessionHeading">
+      <div class="admin-panel-heading">
+        <div>
+          <p class="eyebrow">Администрирование</p>
+          <h2 id="adminSessionHeading">Активные подключения</h2>
+        </div>
+        <button class="text-button" id="refreshSessionsButton" type="button">Обновить</button>
+      </div>
+      <div class="session-table-scroll">
+        <table class="session-table">
+          <thead>
+            <tr><th>Email</th><th>Роль</th><th>Сессий</th><th>Управление</th></tr>
+          </thead>
+          <tbody id="adminSessionRows"></tbody>
+        </table>
+      </div>
+      <p class="message" id="sessionMessage" role="status" aria-live="polite"></p>
     </section>
     <section class="workspace">
       <aside class="form-panel">

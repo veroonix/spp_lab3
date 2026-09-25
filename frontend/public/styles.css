@@ -302,6 +302,65 @@ textarea {
   display: none !important;
 }
 
+.admin-panel {
+  border-top: 1px solid var(--line);
+  margin-bottom: 24px;
+  padding: 18px 0;
+}
+
+.admin-panel-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.admin-panel-heading h2 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.admin-panel-heading .eyebrow {
+  margin-bottom: 4px;
+}
+
+.session-table-scroll {
+  overflow-x: auto;
+}
+
+.session-table {
+  border-collapse: collapse;
+  text-align: left;
+  width: 100%;
+}
+
+.session-table th,
+.session-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px;
+}
+
+.session-table th {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.session-action-button {
+  background: transparent;
+  border: 0;
+  color: var(--danger);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 4px 0;
+}
+
+.session-action-button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
 @media (max-width: 760px) {
   .topbar,
   .intro {

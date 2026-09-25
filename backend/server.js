@@ -76,6 +76,7 @@ const dbReady = new Promise((resolve, reject) => {
       ip TEXT NOT NULL,
       failed_count INTEGER NOT NULL DEFAULT 0,
       locked_until INTEGER NOT NULL DEFAULT 0,
+      last_attempt_at INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (email, ip)
     )`, async (error) => {
       if (error) {
@@ -84,6 +85,16 @@ const dbReady = new Promise((resolve, reject) => {
       }
 
       try {
+        const columns = await new Promise((resolve, reject) => {
+          db.all('PRAGMA table_info(login_attempts)', (pragmaError, rows) => {
+            if (pragmaError) reject(pragmaError);
+            else resolve(rows);
+          });
+        });
+        if (!columns.some((column) => column.name === 'last_attempt_at')) {
+          await run('ALTER TABLE login_attempts ADD COLUMN last_attempt_at INTEGER NOT NULL DEFAULT 0');
+        }
+
         const adminEmail = (process.env.ADMIN_EMAIL || 'admin@example.com').toLowerCase();
         const adminPassword = process.env.ADMIN_PASSWORD || 'change-me-now';
         if (NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
@@ -196,6 +207,26 @@ function run(sql, params = []) {
   });
 }
 
+async function cleanupExpiredRecords() {
+  const now = Date.now();
+  const staleAttemptBefore = now - config.loginLockMs;
+  const [sessions, recoveryTokens, loginAttempts] = await Promise.all([
+    run('DELETE FROM sessions WHERE expires_at < ?', [now]),
+    run('DELETE FROM recovery_tokens WHERE expires_at < ? OR used = 1', [now]),
+    run(`DELETE FROM login_attempts WHERE last_attempt_at < ?
+      AND (locked_until = 0 OR locked_until < ?)`, [staleAttemptBefore, now]),
+  ]);
+  const deleted = {
+    sessions: sessions.changes,
+    recoveryTokens: recoveryTokens.changes,
+    loginAttempts: loginAttempts.changes,
+  };
+  if (Object.values(deleted).some((count) => count > 0)) {
+    logger.info('expired_records_cleaned', deleted);
+  }
+  return deleted;
+}
+
 function publicUser(user) {
   return { id: user.id, email: user.email, role: user.role };
 }
@@ -224,6 +255,7 @@ const credentialsSchema = z.object({
   email: z.string().trim().email().max(160).transform((value) => value.toLowerCase()),
   password: z.string().min(8).max(200),
 });
+const provisionUserSchema = credentialsSchema.extend({ role: z.enum(['viewer', 'editor', 'admin']) });
 const recoveryRequestSchema = z.object({ email: z.string().trim().email().max(160) });
 const resetSchema = z.object({ token: z.string().min(20), password: z.string().min(8).max(200) });
 
@@ -258,10 +290,13 @@ app.post('/api/auth/login', async (req, res, next) => {
     const valid = user && await verifyPassword(password, user.password_hash);
     if (!valid) {
       const failedCount = (attempt?.failed_count || 0) + 1;
-      const lockedUntil = failedCount >= config.loginLimit ? Date.now() + config.loginLockMs : 0;
-      await run(`INSERT INTO login_attempts (email, ip, failed_count, locked_until) VALUES (?, ?, ?, ?)
-        ON CONFLICT(email, ip) DO UPDATE SET failed_count = excluded.failed_count, locked_until = excluded.locked_until`,
-      [email, ip, failedCount, lockedUntil]);
+      const lastAttemptAt = Date.now();
+      const lockedUntil = failedCount >= config.loginLimit ? lastAttemptAt + config.loginLockMs : 0;
+      await run(`INSERT INTO login_attempts (email, ip, failed_count, locked_until, last_attempt_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(email, ip) DO UPDATE SET failed_count = excluded.failed_count,
+          locked_until = excluded.locked_until, last_attempt_at = excluded.last_attempt_at`,
+      [email, ip, failedCount, lockedUntil, lastAttemptAt]);
       logger.warn('login_failed', { requestId: req.requestId, email, ip, failedCount });
       if (lockedUntil) res.setHeader('Retry-After', Math.ceil(config.loginLockMs / 1000));
       return sendError(res, lockedUntil ? 429 : 401, lockedUntil ? 'LOGIN_LOCKED' : 'INVALID_CREDENTIALS', 'Неверный email или пароль');
@@ -270,6 +305,88 @@ app.post('/api/auth/login', async (req, res, next) => {
     const token = createToken();
     await run('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', [hashToken(token), user.id, Date.now() + config.sessionTtlMs]);
     return res.json({ token, expiresIn: config.sessionTtlMs / 1000, user: publicUser(user) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.post('/api/auth/register', async (req, res, next) => {
+  try {
+    await dbReady;
+    const result = credentialsSchema.safeParse(req.body);
+    if (!result.success) return sendError(res, 400, 'VALIDATION_ERROR', validationError(result.error));
+
+    const { email, password } = result.data;
+    const passwordHash = await hashPassword(password);
+    const createdUser = await run(`INSERT INTO users (email, password_hash, role)
+      VALUES (?, ?, 'viewer') ON CONFLICT(email) DO NOTHING`, [email, passwordHash]);
+    if (!createdUser.changes) {
+      return sendError(res, 409, 'EMAIL_ALREADY_REGISTERED', 'Аккаунт с таким email уже существует');
+    }
+
+    const token = createToken();
+    await run('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', [
+      hashToken(token), createdUser.id, Date.now() + config.sessionTtlMs,
+    ]);
+    const user = { id: createdUser.id, email, role: 'viewer' };
+    logger.info('user_registered', { requestId: req.requestId, email, role: user.role });
+    return res.status(201).json({ token, expiresIn: config.sessionTtlMs / 1000, user: publicUser(user) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.post('/api/admin/users', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const result = provisionUserSchema.safeParse(req.body);
+    if (!result.success) return sendError(res, 400, 'VALIDATION_ERROR', validationError(result.error));
+
+    const { email, password, role } = result.data;
+    const passwordHash = await hashPassword(password);
+    const createdUser = await run(`INSERT INTO users (email, password_hash, role)
+      VALUES (?, ?, ?) ON CONFLICT(email) DO NOTHING`, [email, passwordHash, role]);
+    if (!createdUser.changes) {
+      return sendError(res, 409, 'EMAIL_ALREADY_REGISTERED', 'Аккаунт с таким email уже существует');
+    }
+
+    const user = { id: createdUser.id, email, role };
+    logger.info('user_provisioned', { requestId: req.requestId, actorId: req.user.id, email, role });
+    return res.status(201).json({ user: publicUser(user) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get('/api/admin/users', authenticate, requireRole('admin'), async (_req, res, next) => {
+  try {
+    const users = await queryAll(`SELECT users.id, users.email, users.role,
+        COUNT(sessions.token_hash) AS activeSessionCount
+      FROM users LEFT JOIN sessions
+        ON sessions.user_id = users.id AND sessions.expires_at > ?
+      GROUP BY users.id ORDER BY users.email COLLATE NOCASE`, [Date.now()]);
+    return res.json(users);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.delete('/api/admin/users/:id/sessions', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const userId = Number(req.params.id);
+    if (!Number.isSafeInteger(userId) || userId < 1) {
+      return sendError(res, 400, 'VALIDATION_ERROR', 'Некорректный идентификатор пользователя');
+    }
+    const user = await queryOne('SELECT id FROM users WHERE id = ?', [userId]);
+    if (!user) return sendError(res, 404, 'USER_NOT_FOUND', 'Пользователь не найден');
+
+    const result = await run('DELETE FROM sessions WHERE user_id = ?', [userId]);
+    logger.info('user_sessions_revoked', {
+      requestId: req.requestId,
+      actorId: req.user.id,
+      targetUserId: userId,
+      revokedSessions: result.changes,
+    });
+    return res.json({ revokedSessions: result.changes });
   } catch (error) {
     return next(error);
   }
@@ -343,8 +460,14 @@ app.post('/api/books', authenticate, requireRole('admin', 'editor'), upload.sing
     const data = await parseBody(bookSchema, req, res);
     if (!data) return;
     const coverPath = req.file ? req.file.filename : null;
-    const result = await run(`INSERT INTO books (title, author, year, genre, description, cover_path)
-      VALUES (?, ?, ?, ?, ?, ?)`, [data.title, data.author, data.year, data.genre, data.description, coverPath]);
+    let result;
+    try {
+      result = await run(`INSERT INTO books (title, author, year, genre, description, cover_path)
+        VALUES (?, ?, ?, ?, ?, ?)`, [data.title, data.author, data.year, data.genre, data.description, coverPath]);
+    } catch (error) {
+      if (req.file) fs.rmSync(req.file.path, { force: true });
+      throw error;
+    }
     const book = await queryOne('SELECT * FROM books WHERE id = ?', [result.id]);
     return res.status(201).json(formatBook(book));
   } catch (error) { return next(error); }
@@ -421,6 +544,11 @@ app.use((error, _req, res, _next) => {
 
 async function startServer() {
   await dbReady;
+  await cleanupExpiredRecords().catch((error) => logger.error('expired_records_cleanup_failed', { message: error.message }));
+  const cleanupInterval = setInterval(() => {
+    cleanupExpiredRecords().catch((error) => logger.error('expired_records_cleanup_failed', { message: error.message }));
+  }, 60 * 60 * 1000);
+  cleanupInterval.unref();
   return app.listen(PORT, () => logger.info('server_started', { port: PORT, environment: NODE_ENV }));
 }
 
@@ -431,4 +559,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, db, dbReady, startServer };
+module.exports = { app, db, dbReady, cleanupExpiredRecords, startServer };
