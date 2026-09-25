@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Книжная полка</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Лабораторная работа №2</p>
+        <h1>Книжная полка</h1>
+      </div><span class="api-status" id="apiStatus">REST API</span>
+    </header>
+    <section class="intro">
+      <div>
+        <p class="eyebrow">Личная коллекция</p>
+        <h2>Каталог книг</h2>
+        <p>Управляйте библиотекой без перезагрузки страницы.</p>
+      </div>
+    </section>
+    <section class="auth-panel">
+      <div>
+        <p class="eyebrow">Доступ к каталогу</p>
+        <strong id="authState">Войдите, чтобы продолжить</strong>
+      </div>
+      <form id="loginForm" class="auth-form">
+        <input id="loginEmail" type="email" placeholder="Email" required autocomplete="email">
+        <input id="loginPassword" type="password" placeholder="Пароль" required minlength="8" autocomplete="current-password">
+        <button class="primary-button" type="submit">Войти</button>
+        <button class="text-button" id="recoverButton" type="button">Восстановить доступ</button>
+      </form>
+      <button class="text-button hidden" id="logoutButton" type="button">Выйти</button>
+    </section>
+    <section class="workspace">
+      <aside class="form-panel">
+        <div class="panel-heading"><span class="eyebrow" id="formEyebrow">Новая запись</span><button
+            class="icon-button hidden" id="cancelButton" type="button" aria-label="Отменить редактирование">×</button>
+        </div>
+        <h2 id="formTitle">Добавить книгу</h2>
+        <form id="bookForm" enctype="multipart/form-data">
+          <input type="hidden" id="bookId">
+
+          <label>
+            Название
+            <input id="title" name="title" required maxlength="120" placeholder="Например, Дюна">
+          </label>
+
+          <label>
+            Автор
+            <input id="author" name="author" required maxlength="100" placeholder="Фрэнк Герберт">
+          </label>
+
+          <div class="form-row">
+            <label>
+              Год
+              <input id="year" name="year" type="number" min="1000" max="2026" required placeholder="1965">
+            </label>
+
+            <label>
+              Жанр
+              <select id="genre" name="genre" required>
+                <option value="">Выберите жанр</option>
+              </select>
+            </label>
+          </div>
+
+          <label>
+            Описание
+            <textarea id="description" name="description" maxlength="1000" rows="4" placeholder="Короткая заметка о книге"></textarea>
+          </label>
+
+          <label class="file-label">
+            Обложка <span>(JPG, PNG или WEBP до 5 МБ)</span>
+            <input id="cover" name="cover" type="file" accept="image/jpeg,image/png,image/webp">
+          </label>
+
+          <button class="primary-button" type="submit" id="submitButton">Добавить книгу</button>
+        </form>
+        <p class="message" id="formMessage" role="alert"></p>
+      </aside>
+      <section class="catalog">
+        <div class="catalog-heading">
+          <div>
+            <p class="eyebrow">Каталог</p>
+            <h2>Ваши книги</h2>
+          </div>
+        </div>
+        <div class="book-grid" id="bookGrid"></div>
+        <div class="empty hidden" id="emptyState">
+          <strong>Здесь пока нет книг</strong>
+          <span>Добавьте первую книгу с помощью формы.</span>
+        </div>
+      </section>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+
+</html>
