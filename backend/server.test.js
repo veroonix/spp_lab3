@@ -68,6 +68,7 @@ test.after(() => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
+// Проверяет, что выход со всех устройств отзывает каждую сессию пользователя.
 test('logout-all revokes every session owned by the current user', async () => {
   const firstToken = await login('editor@test.local', 'editor-password');
   const secondToken = await login('editor@test.local', 'editor-password');
@@ -88,6 +89,7 @@ test('logout-all revokes every session owned by the current user', async () => {
   assert.equal(revoked.body.code, 'TOKEN_INVALID');
 });
 
+// Проверяет просмотр и отзыв сессий администратором, а также запрет для viewer.
 test('admins can list active sessions and revoke another user sessions', async () => {
   const adminToken = await login('admin@test.local', 'admin-password');
   const created = await request(app)
@@ -125,6 +127,7 @@ test('admins can list active sessions and revoke another user sessions', async (
   assert.ok(firstToken);
 });
 
+// Проверяет удаление просроченных сессий, использованных токенов и старых попыток входа.
 test('cleans expired sessions, recovery tokens, and stale login attempts', async () => {
   const user = await queryOne('SELECT id FROM users WHERE email = ?', ['viewer@test.local']);
   const oldTimestamp = Date.now() - 24 * 60 * 60 * 1000;
@@ -154,6 +157,7 @@ test('cleans expired sessions, recovery tokens, and stale login attempts', async
   assert.equal(await queryOne('SELECT email FROM login_attempts WHERE email = ?', ['stale@test.local']), undefined);
 });
 
+// Проверяет, что регистрация всегда создаёт viewer и запрещает повторный email.
 test('registers new accounts as viewers and rejects duplicate emails', async () => {
   const registration = await request(app).post('/api/auth/register').send({
     email: 'new-viewer@test.local',
@@ -181,6 +185,7 @@ test('registers new accounts as viewers and rejects duplicate emails', async () 
   assert.equal(duplicate.body.code, 'EMAIL_ALREADY_REGISTERED');
 });
 
+// Проверяет, что назначать роли и создавать управляемые аккаунты может только admin.
 test('only admins can provision accounts with assigned roles', async () => {
   const anonymous = await request(app).post('/api/admin/users').send({
     email: 'managed-editor@test.local',
@@ -218,6 +223,7 @@ test('only admins can provision accounts with assigned roles', async () => {
   assert.equal(duplicate.status, 409);
 });
 
+// Проверяет авторизацию и разграничение чтения, создания и удаления книг по ролям.
 test('protects books and enforces role permissions', async () => {
   const anonymous = await request(app).get('/api/books');
   assert.equal(anonymous.status, 401);
@@ -256,6 +262,7 @@ test('protects books and enforces role permissions', async () => {
   assert.equal(deleted.status, 204);
 });
 
+// Проверяет очистку загруженной обложки, если сохранение книги завершается ошибкой.
 test('removes uploaded cover when book insert fails', async () => {
   const editorToken = await login('editor@test.local', 'editor-password');
   const uploadDir = pathJoin(dataDir, 'uploads');
@@ -281,6 +288,7 @@ test('removes uploaded cover when book insert fails', async () => {
   assert.deepEqual(fs.readdirSync(uploadDir).sort(), filesBefore);
 });
 
+// Проверяет блокировку после неверных паролей и восстановление доступа по токену.
 test('locks repeated credential guesses and supports password recovery', async () => {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const response = await request(app).post('/api/auth/login').send({
@@ -309,6 +317,7 @@ test('locks repeated credential guesses and supports password recovery', async (
   assert.ok(newToken);
 });
 
+// Проверяет HTTP 404 и машинный код для неизвестного API-маршрута.
 test('returns standard not-found status for unknown API resources', async () => {
   const response = await request(app).get('/api/missing');
   assert.equal(response.status, 404);
