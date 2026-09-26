@@ -6,6 +6,7 @@ services:
     environment:
       PORT: 3000
       DATA_DIR: /app/data
+      LOG_PRETTY: "${LOG_PRETTY:-false}"
       NODE_ENV: production
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD before starting}

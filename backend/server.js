@@ -127,7 +127,7 @@ app.use((req, res, next) => {
   res.on('finish', () => logger.info('http_request', {
     requestId: req.requestId,
     method: req.method,
-    path: req.originalUrl,
+    path: req.path,
     status: res.statusCode,
     durationMs: Date.now() - startedAt,
     ip: req.ip,
@@ -417,7 +417,7 @@ app.post('/api/auth/recover', async (req, res, next) => {
       const token = createToken();
       await run('INSERT INTO recovery_tokens (token_hash, user_id, expires_at) VALUES (?, ?, ?)', [hashToken(token), user.id, Date.now() + config.recoveryTtlMs]);
       const resetUrl = mailer.recoveryUrl(token);
-      logger.info('password_recovery_requested', { requestId: req.requestId, email: user.email, resetUrl: NODE_ENV === 'production' ? undefined : resetUrl });
+      logger.info('password_recovery_requested', { requestId: req.requestId, email: user.email });
       await mailer.sendRecoveryEmail(user.email, resetUrl);
       if (NODE_ENV !== 'production') response.resetToken = token;
     }

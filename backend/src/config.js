@@ -3,11 +3,15 @@ const path = require('node:path');
 const rootDir = path.join(__dirname, '..');
 const port = Number(process.env.PORT || 3000);
 const dataDir = process.env.DATA_DIR || path.join(rootDir, 'data');
+const logFile = process.env.LOG_FILE || path.join(dataDir, 'logs', 'app.jsonl');
+const prettyLogs = process.env.LOG_PRETTY === 'true';
 
 module.exports = {
   rootDir,
   port,
   dataDir,
+  logFile,
+  prettyLogs,
   uploadDir: path.join(dataDir, 'uploads'),
   nodeEnv: process.env.NODE_ENV || 'development',
   sessionTtlMs: 8 * 60 * 60 * 1000,
