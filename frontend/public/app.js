@@ -169,6 +169,7 @@ async function loadAdminSessions() {
 function clearSession() {
   authToken = null;
   currentUser = null;
+  books = [];
   localStorage.removeItem('libraryToken');
   localStorage.removeItem('libraryUser');
   updateAuthState();

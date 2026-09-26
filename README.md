@@ -106,7 +106,7 @@ Admin видит количество активных сессий пользо
 Просмотр stdout с форматированием через `jq` из PowerShell:
 
 ```powershell
-docker compose logs --no-log-prefix -f backend | jq .
+cmd.exe /c "docker compose logs --no-log-prefix -f backend | jq --unbuffered ."
 ```
 
 Или напрямую через Docker CLI в Bash:
